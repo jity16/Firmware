@@ -144,6 +144,7 @@ void FlightTask::_setDefaultConstraints()
 	_constraints.min_distance_to_ground = NAN;
 	_constraints.max_distance_to_ground = NAN;
 	_constraints.want_takeoff = false;
+	_constraints.rescale_xy_thrust = false;
 }
 
 bool FlightTask::_checkTakeoff()
