@@ -38,11 +38,21 @@
 
 using namespace matrix;
 
-bool FlightTaskManualPositionSmoothVel::activate()
+bool FlightTaskManualPositionSmoothVel::activate(vehicle_local_position_setpoint_s state_prev)
 {
-	bool ret = FlightTaskManualPosition::activate();
+	bool ret = FlightTaskManualPosition::activate(state_prev);
 
-	reset(Axes::XYZ);
+	// Check if the previous FlightTask provided setpoints
+	checkSetpoints(state_prev);
+	const Vector3f accel_prev = Vector3f(state_prev.acc_x, state_prev.acc_y, state_prev.acc_z);
+	const Vector3f vel_prev = Vector3f(state_prev.vx, state_prev.vy, state_prev.vz);
+	const Vector3f pos_prev = Vector3f(state_prev.x, state_prev.y, state_prev.z);
+
+	for (int i = 0; i < 3; ++i) {
+		_smoothing[i].reset(accel_prev(i), vel_prev(i), pos_prev(i));
+	}
+
+	_resetPositionLock();
 
 	return ret;
 }
@@ -51,37 +61,18 @@ void FlightTaskManualPositionSmoothVel::reActivate()
 {
 	// The task is reacivated while the vehicle is on the ground. To detect takeoff in mc_pos_control_main properly
 	// using the generated jerk, reset the z derivatives to zero
-	reset(Axes::XYZ, true);
-}
-
-void FlightTaskManualPositionSmoothVel::reset(Axes axes, bool force_z_zero)
-{
-	int count;
-
-	switch (axes) {
-	case Axes::XY:
-		count = 2;
-		break;
-
-	case Axes::XYZ:
-		count = 3;
-		break;
-
-	default:
-		count = 0;
-		break;
-	}
-
-	// TODO: get current accel
-	for (int i = 0; i < count; ++i) {
+	for (int i = 0; i < 2; ++i) {
 		_smoothing[i].reset(0.f, _velocity(i), _position(i));
 	}
 
-	// Set the z derivatives to zero
-	if (force_z_zero) {
-		_smoothing[2].reset(0.f, 0.f, _position(2));
-	}
+	_smoothing[2].reset(0.f, 0.f, _position(2));
 
+	_initEkfResetCounters();
+	_resetPositionLock();
+}
+
+void FlightTaskManualPositionSmoothVel::_resetPositionLock()
+{
 	_position_lock_xy_active = false;
 	_position_lock_z_active = false;
 	_position_setpoint_xy_locked(0) = NAN;
